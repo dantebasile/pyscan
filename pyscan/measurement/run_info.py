@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from ..general.item_attribute import ItemAttribute
 from ..general.get_pyscan_version import get_pyscan_version
-from .scans import PropertyScan, AverageScan
+from .scans import PropertyScan, AverageScan, OptimizeFunctionalScan
 import pyscan as ps
 
 
@@ -118,6 +118,25 @@ class RunInfo(ItemAttribute):
                 assert isinstance(self.scans[i], PropertyScan) and len(self.scans[i].input_dict) == 0, \
                     f"ContinuousScan found at scan{self.continuous_scan_index} but is not the highest level scan."
 
+        num_optimization_scans = 0
+        # find the scan to set to optimize (if any) and determine the index
+        for i, scan in enumerate(self.scans):
+            if isinstance(scan, ps.OptimizeFunctionalScan):
+                num_optimization_scans += 1
+                self.optimization = True
+                self.optimization_scan_index = i
+
+        # throw an error if more than one optimization scan is found
+        if num_av_scans > 1:
+            assert False, "More than one optimization scan is not allowed"
+
+        # If there is an OptimizeFunctionalScan, ensure it is the lowest level scan
+        if self.optimization:
+            for i in range(self.optimization_scan_index):
+                assert isinstance(self.scans[i], PropertyScan) and len(self.scans[i].input_dict) == 0, \
+                    f"OptimizationFunctionalScan found at scan{self.optimization_scan_index} " \
+                    "but it is not the lowest level scan"
+
     def stop_continuous(self, plus_one=False):
         stop = False
         if self.continuous:
@@ -230,6 +249,22 @@ class RunInfo(ItemAttribute):
             self._has_average_scan = False
 
         return self._has_average_scan
+
+    @property
+    def has_optimization_scan(self):
+        ''' Returns a boolean of whether or not an optimization scan is present.
+        '''
+        num_optimization_scans = 0
+        for scan in self.scans:
+            if isinstance(scan, OptimizeFunctionalScan):
+                num_optimization_scans += 1
+
+        if num_optimization_scans > 0:
+            self._has_optimization_scan = True
+        else:
+            self._has_optimization_scan = False
+
+        return self._has_optimization_scan
 
     ####################### LEGACY SECTION ########################
     # This section is set up to alert users who try to use legacy nomenclature

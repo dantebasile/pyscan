@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+from time import sleep
 from ..general.same_length import same_length
 from ..general.item_attribute import ItemAttribute
 
@@ -314,3 +315,28 @@ class OptimizeFunctionalScan(AbstractScan):
         Not used
         '''
         return 1
+
+    def sample_function(self, args):
+        """
+        optimize_experiment(), inside for loop
+        """
+
+        self.iterate(self, args)  # TODO: scan0 must be OptimizeFunctionalScan
+
+        sleep(self.runinfo.scan0.dt)
+
+        data = self.runinfo.measure_function(self)
+
+        if np.all(np.array(self.runinfo.indicies) == 0):
+            self.preallocate(data)
+
+        self.save_point(data)
+        if not self.runinfo.running:  # TODO: change all <is False> to <if not> to compare value instead of instance
+            self.runinfo.complete = 'stopped'
+            # break
+
+        sample = np.array([self.__dict__[output][self.runinfo.scan0.i] for output in self.sample_f_outputs])
+
+        self.runinfo.scan0.i += 1  # TODO: where to increment i? need index as well?
+
+        return sample

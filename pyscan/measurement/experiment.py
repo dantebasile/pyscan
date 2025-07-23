@@ -29,12 +29,17 @@ class Experiment(AbstractExperiment):
         Indicates whether to print status updates, defaults to `False`
     '''
 
-    def __init__(self, runinfo, devices, data_dir=None, verbose=False, time=False):
+    def __init__(self, runinfo, devices, data_dir=None, verbose=False, time=False,
+                 control_function=None, sample_function_outputs=None):
         '''Constructor method
         '''
         super().__init__(runinfo, devices, data_dir)
 
         self.runinfo.time = time
+
+        self.control_f = control_function
+        self.sample_f_outputs = sample_function_outputs
+        # prop?
 
     def generic_experiment(self):
         if self.runinfo.time:
@@ -252,6 +257,118 @@ class Experiment(AbstractExperiment):
                         self.runinfo.average_index / (self.runinfo.average_index + 1))
                     self[key] += (
                         value / (self.runinfo.average_index + 1))
+
+    def optim_experiment(self):
+
+        if self.runinfo.time:
+            for i in range(6):
+                self.runinfo['t{}'.format(i)] = np.zeros(self.runinfo.dims)
+
+        t0 = (datetime.now()).timestamp()
+
+        # Use for scan, but break if self.runinfo.running=False
+        for m in self.runinfo.scan3.iterator():
+            self.runinfo.scan3.i = m
+            self.runinfo.scan3.iterate(m, self.devices)
+            sleep(self.runinfo.scan3.dt)
+
+            for k in self.runinfo.scan2.iterator():
+                self.runinfo.scan2.i = k
+                self.runinfo.scan2.iterate(k, self.devices)
+                sleep(self.runinfo.scan2.dt)
+
+                for j in self.runinfo.scan1.iterator():
+                    self.runinfo.scan1.i = j
+                    self.runinfo.scan1.iterate(j, self.devices)
+                    sleep(self.runinfo.scan1.dt)
+
+                    for i in self.runinfo.scan0.iterator():
+                        self.runinfo.scan0.i = i
+                        indicies = self.runinfo.indicies
+
+                        if self.runinfo.time:
+                            self.runinfo.t0[indicies] = (datetime.now()).timestamp()
+
+                        self.runinfo.scan0.iterate(i, self.devices)
+
+                        if self.runinfo.time:
+                            self.runinfo.t1[indicies] = (datetime.now()).timestamp()
+
+                        sleep(self.runinfo.scan0.dt)
+
+                        if self.runinfo.time:
+                            self.runinfo.t2[indicies] = (datetime.now()).timestamp()
+
+                        data = self.runinfo.measure_function(self)
+
+                        if self.runinfo.time:
+                            self.runinfo.t3[indicies] = (datetime.now()).timestamp()
+
+                        if np.all(np.array(self.runinfo.indicies) == 0):
+                            self.preallocate(data)
+
+                        if self.runinfo.time:
+                            self.runinfo.t4[indicies] = (datetime.now()).timestamp()
+
+                        self.save_point(data)
+
+                        if self.runinfo.time:
+                            self.runinfo.t5[indicies] = (datetime.now()).timestamp()
+
+                        if self.runinfo.running is False:
+                            self.runinfo.complete = 'stopped'
+                            break
+
+                        if isinstance(self.runinfo.scan0, ps.ContinuousScan):
+                            self.reallocate()
+
+                    # Check if complete, stopped early
+                    if self.runinfo.running is False:
+                        self.runinfo.complete = 'stopped'
+                        break
+
+                    if isinstance(self.runinfo.scan1, ps.ContinuousScan):
+                        self.reallocate()
+
+                if self.runinfo.running is False:
+                    self.runinfo.complete = 'stopped'
+                    break
+
+                if isinstance(self.runinfo.scan2, ps.ContinuousScan):
+                    self.reallocate()
+
+            if self.runinfo.verbose:
+                print('Scan {}/{} Complete'.format(m + 1, self.runinfo.scan3.n))
+            if self.runinfo.running is False:
+                self.runinfo.complete = 'stopped'
+                break
+
+            if isinstance(self.runinfo.scan3, ps.ContinuousScan):
+                self.reallocate()
+
+        self.runinfo.complete = True
+        self.runinfo.running = False
+
+        if self.runinfo.time:
+            try:
+                self.runinfo.dt0 = [0] + [self.runinfo.t0[i]
+                                          - self.runinfo.t0[i - 1]
+                                          for i in range(1, len(self.runinfo.t0))]
+            except Exception:
+                pass
+            self.runinfo.dt1 = self.runinfo.t1 - self.runinfo.t0
+            self.runinfo.dt2 = self.runinfo.t2 - self.runinfo.t1
+            self.runinfo.dt3 = self.runinfo.t3 - self.runinfo.t2
+            self.runinfo.dt4 = self.runinfo.t4 - self.runinfo.t3
+            self.runinfo.dt5 = self.runinfo.t5 - self.runinfo.t4
+            self.runinfo.dttotal = self.runinfo.t5 - self.runinfo.t0
+            self.runinfo.total_run_time = np.sum(self.runinfo.dttotal)
+            self.runinfo.total_time = (datetime.now()).timestamp() - t0
+
+        if 'end_function' in list(self.runinfo.keys()):
+            self.runinfo.end_function(self)
+
+         # TODO: where to put this?
 
     def run(self):
         '''Runs the experiment while locking the console

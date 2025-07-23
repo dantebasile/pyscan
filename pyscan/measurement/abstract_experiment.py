@@ -6,7 +6,7 @@ import numpy as np
 import pyscan as ps
 from threading import Thread as thread
 from time import strftime
-from pyscan.measurement.scans import PropertyScan, RepeatScan, ContinuousScan
+from pyscan.measurement.scans import PropertyScan, RepeatScan, ContinuousScan, OptimizeFunctionalScan
 from ..general.pyscan_json_encoder import PyscanJSONEncoder
 from ..general.item_attribute import ItemAttribute
 from ..general.is_list_type import is_list_type
@@ -256,6 +256,7 @@ class AbstractExperiment(ItemAttribute):
 
         num_repeat_scans = 0
         num_continuous_scans = 0
+        num_optimization_scans = 0
         for scan in self.runinfo.scans:
             scan.check_same_length()
             if isinstance(scan, PropertyScan):
@@ -266,11 +267,15 @@ class AbstractExperiment(ItemAttribute):
                 num_repeat_scans += 1
             if isinstance(scan, ContinuousScan):
                 num_continuous_scans += 1
+            if isinstance(scan, OptimizeFunctionalScan):
+                num_optimization_scans += 1
 
         if num_repeat_scans > 1:
             assert False, "More than one repeat scan detected. This is not allowed."
         if num_continuous_scans > 1:
             assert False, "More than one continuous scan detected. This is not allowed."
+        if num_optimization_scans > 1:
+            assert False, "More than one optimization scan detected. This is not allowed."
 
         base_name = strftime("%Y%m%dT%H%M%S")
         save_path = self.runinfo.data_path / '{}.hdf5'.format(base_name)
